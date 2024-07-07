@@ -25,7 +25,8 @@ PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 ShaderAbstractions = "65257c39-d410-5151-9873-9b3e5be5013e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+libmousetrap_jll = "287f9a42-973b-50d0-ae32-9952e735a47d"
 
 [compat]
 GLMakie = "0.10.4"
-julia = "≥ 1.10.2"
+julia = "1.10.0"
