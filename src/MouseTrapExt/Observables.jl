@@ -74,3 +74,8 @@ Base.getindex(w::Entry) = get_text(w)
 Base.setindex!(w::Entry, x::String) = set_text!(w, x)
 Observables.on(f, w::Entry) = connect_signal_activate!(x -> (f(w[]); return nothing), w)
 Observables.notify(w::Entry) = emit_signal_activate(w)
+
+Base.getindex(w::CheckButton) = get_state(w) == CHECK_BUTTON_STATE_ACTIVE
+Base.setindex!(w::CheckButton, x::Bool) = set_state!(w, x ? CHECK_BUTTON_STATE_ACTIVE : CHECK_BUTTON_STATE_INACTIVE)
+Observables.on(f, w::CheckButton) = connect_signal_toggled!(x -> f(x[]))
+Observables.notify(w::CheckButton) = emit_signal_toggled(w)

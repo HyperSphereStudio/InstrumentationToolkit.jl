@@ -1,7 +1,7 @@
 module InstrumentationToolkit
 	using FileIO, PrecompileTools, DataFrames
 	
-	export dict, Expando, GUI
+	export dict, Expando, GUI, HTimer, resume, pause, start
 
     include("MouseTrapExt/Mousetrap.jl")
     include("Communication/Communication.jl")
@@ -24,6 +24,20 @@ module InstrumentationToolkit
 		Base.values(x::Expando) = values(Dict(x))
 		Base.Dict(x::Expando) = x.dict
 	end 
+	
+	mutable struct HTimer
+        t::Union{Nothing, Timer}
+        cb::Function
+        delay::Real
+        interval::Real
+    
+        HTimer(cb::Function, delay, interval = 0; start=true) = (t = new(nothing, cb, delay, interval); start && resume(t); return t)
+        Base.close(h::HTimer) = h.t !== nothing && (close(h.t); h.t = nothing)
+    end
+    resume(h::HTimer) = h.t === nothing && (h.t = Timer(h.cb, h.delay; interval=h.interval))
+    pause(h::HTimer) = close(h)
+	start(h::HTimer) = resume(h)
+    Base.reset(h::HTimer) = (pause(h); resume(h))
 
 	using Pkg
 	function install_graphics()

@@ -4,12 +4,13 @@ using LibSerialPort, PrecompileTools, Observables
 
 export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
 export readn, peekn, readl, peekl
+export PortsDropDown
 
 abstract type IOReader end
 
 Base.take!(::IOReader, data::IOBuffer) = ()
 
-mutable struct MicroControllerPort
+mutable struct MicroControllerPort{R}
     name
     sp
     baud::Integer
@@ -18,11 +19,11 @@ mutable struct MicroControllerPort
     parity::SPParity
     nstopbits::Integer
     buffer::IOBuffer
-    reader
+    reader::R
     connection::Observable{Bool}
 
     function MicroControllerPort(name, baud, reader; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
-        return new(name, nothing, baud, mode, ndatabits, parity, nstopbits, IOBuffer(), reader, Observable(false; ignore_equal_values=true))
+        return new{typeof(reader)}(name, nothing, baud, mode, ndatabits, parity, nstopbits, IOBuffer(), reader, Observable(false; ignore_equal_values=true))
     end
         
     Observables.on(cb::Function, p::MicroControllerPort; update=false) = on(cb, p.connection; update=update)
@@ -61,9 +62,9 @@ end
 function readport(f::Function, p::MicroControllerPort)
     if !isopen(p)
         close(p)
-        return
+        return false
     end
-    LibSerialPort.bytesavailable(p.sp) > 0 || return
+    LibSerialPort.bytesavailable(p.sp) > 0 || return true
    
     try
         p.buffer.ptr = p.buffer.size + 1
@@ -83,7 +84,18 @@ function readport(f::Function, p::MicroControllerPort)
         p.buffer.size -= bytes_read
         read_data === nothing && break
     end
+
+    return true
 end
+
+function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
+	isopen(p) || error("Port not Opened!")
+    LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
+end
+
+Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
+Base.write(p::MicroControllerPort, a::AbstractArray) = write(p, pointer(a), length(a))
+Base.write(p::MicroControllerPort, io::IOBuffer) = write(p, pointer(io.data), io.ptr - 1)
 
 struct FixedLengthReader <: IOReader length::Integer end
 function Base.take!(r::FixedLengthReader, io::IOBuffer)
@@ -95,9 +107,8 @@ function Base.take!(r::FixedLengthReader, io::IOBuffer)
     return nothing
 end
 
-
-const MAGIC_NUMBER::UInt32 = 0xDEADBEEF
-const TAIL_MAGIC_NUMBER::UInt8 = 0xEE
+const MAGIC_NUMBER::UInt16 = 0xDEAD
+const TAIL_MAGIC_NUMBER::UInt16 = 0xBEEF
 
 mutable struct SimpleConnection <: IOReader
     port::MicroControllerPort
@@ -127,7 +138,7 @@ function send(s::SimpleConnection, args...)
     writestd(UInt8(sum(sizeof, args)))
     foreach(writestd, args)
     writestd(TAIL_MAGIC_NUMBER)
-    LibSerialPort.sp_nonblocking_write(s.port.sp.ref, pointer(s.write_buffer.data), s.write_buffer.ptr - 1)
+    write(s.port, s.write_buffer)
 end
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
@@ -173,7 +184,6 @@ function Base.take!(r::SimpleConnection, io::IOBuffer)
     return nothing
 end
 
-
 const PortsObservable = Observable(Set{String}())
 
 function __init__()
@@ -185,13 +195,30 @@ function __init__()
     end
 end
 
-#=
-    @setup_workload begin
-        @compile_workload begin
-            using GLMakie, Observables, CSV, DataFrames, LibSerialPort, HTTP, FileIO, PrecompileTools
-	    test_port()
-        end
+function PortsDropDown(on_port_select)
+    ids = DropDownItemID[]
+    dd = DropDown()
+    observable_func = Ref{Any}(nothing)
+    
+    connect_signal_realize!(dd) do self
+        initial = true
+        observable_func[] = on(PortsObservable; update=true) do pl                                
+                                foreach(id -> remove!(dd, id), ids)
+                                empty!(ids)
+                                for id in pl
+                                   push!(ids, push_back!(_->(initial || on_port_select(id); nothing), dd, id))                                     
+                                end
+                                initial = false
+                            end
+        nothing
     end
-=#
+
+    connect_signal_unrealize!(dd) do self
+        off(observable_func[])
+        nothing
+    end
+
+    dd
+end
 
 end
