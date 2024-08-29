@@ -3,7 +3,7 @@ using Libdl
 export SimpleConnectionProtocol, payload, error_count
 
 if Sys.iswindows()
-    const SimpleConnectionLib = dlopen("SimpleConnection/libConnectionProtocol.dll")
+    const SimpleConnectionLib = dlopen(joinpath(@__DIR__, "SimpleConnection/libConnectionProtocol.dll"))
 else
     @info "Incompatible operating system for simple connection protocol!"
 end
