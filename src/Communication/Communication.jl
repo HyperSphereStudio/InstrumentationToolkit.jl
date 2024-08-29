@@ -1,6 +1,6 @@
 module Communication
 
-using LibSerialPort, PrecompileTools, Observables
+using LibSerialPort, Observables
 
 export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
 export readn, peekn, readl, peekl
