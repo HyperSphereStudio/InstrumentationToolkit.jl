@@ -1,7 +1,5 @@
 module GUI
 
-export MousetrapGLMakieWindow, append_back!
-
 using Reexport
 
 @reexport using Mousetrap

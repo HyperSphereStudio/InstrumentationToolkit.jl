@@ -1,12 +1,11 @@
 name = "InstrumentationToolkit"
 uuid = "96abe400-b566-4cb3-9a4a-1e51861d5e98"
 authors = ["Johnathan Bizzano <bizzanoj@my.erau.edu>"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
-DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 GLAbstraction = "ca6e7d0a-b0c9-59ca-8aba-aebf11497e1c"
@@ -21,12 +20,10 @@ Mousetrap = "5deeb4b9-6e04-4da7-8b7f-c77fb1eae65e"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 ShaderAbstractions = "65257c39-d410-5151-9873-9b3e5be5013e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 libmousetrap_jll = "287f9a42-973b-50d0-ae32-9952e735a47d"
 
 [compat]
-GLMakie = "0.10.4"
-julia = "1.10.0"
+GLMakie = "0.10"

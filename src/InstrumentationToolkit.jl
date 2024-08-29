@@ -1,5 +1,5 @@
 module InstrumentationToolkit
-	using FileIO, PrecompileTools, DataFrames
+	using FileIO
 	
 	export dict, Expando, GUI, HTimer, resume, pause, start
 

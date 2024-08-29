@@ -6,6 +6,8 @@ export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, Por
 export readn, peekn, readl, peekl
 export PortsDropDown
 
+include("SimpleConnection.jl")
+
 abstract type IOReader end
 
 Base.take!(::IOReader, data::IOBuffer) = ()
@@ -94,7 +96,7 @@ function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
 end
 
 Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
-Base.write(p::MicroControllerPort, a::AbstractArray) = write(p, pointer(a), length(a))
+Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
 Base.write(p::MicroControllerPort, io::IOBuffer) = write(p, pointer(io.data), io.ptr - 1)
 
 struct FixedLengthReader <: IOReader length::Integer end
@@ -107,15 +109,13 @@ function Base.take!(r::FixedLengthReader, io::IOBuffer)
     return nothing
 end
 
-const MAGIC_NUMBER::UInt16 = 0xDEAD
-const TAIL_MAGIC_NUMBER::UInt16 = 0xBEEF
-
 mutable struct SimpleConnection <: IOReader
     port::MicroControllerPort
-    write_buffer::IOBuffer
+    scp::SimpleConnectionProtocol
+    buffer::Vector{UInt8}
 
-    function SimpleConnection(port::MicroControllerPort)
-        c = new(port, IOBuffer())
+    function SimpleConnection(port::MicroControllerPort, on_packet_rx::Function, max_payload_size::Integer=256)
+        c = new(port, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 64))
         port.reader = c
         c
     end
@@ -128,17 +128,14 @@ mutable struct SimpleConnection <: IOReader
 end
 setport(s::SimpleConnection, name) = setport(s.port, name)
 readport(f::Function, s::SimpleConnection) = readport(f, s.port)
-
-function send(s::SimpleConnection, args...)
-    s.write_buffer.ptr = 1
-    s.write_buffer.size = 0
-    writestd(x::T) where T <: Number = write(s.write_buffer, hton(x)) 
-    writestd(x) = write(s.write_buffer, x) 
-    writestd(MAGIC_NUMBER)
-    writestd(UInt8(sum(sizeof, args)))
-    foreach(writestd, args)
-    writestd(TAIL_MAGIC_NUMBER)
-    write(s.port, s.write_buffer)
+send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.port, take!(s.scp)))
+Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
+Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
+function Base.take!(r::SimpleConnection, io::IOBuffer)
+    while bytesavailable(io) > 0
+        n = readbytes!(io, r.buffer)
+        readbytes!(r.scp, buffer, n)
+    end
 end
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
@@ -154,35 +151,6 @@ peekl(io::IO, T::Type) = peek(io, T)
 readl(io::IO, T::Type) = read(io, T)
 readl(io::IO, Types::Type...) = [readl(io, T) for T in Types]
 readl(io::IO, T::Type, count::Integer) = [readl(io, T) for i in 1:count]
-
-function Base.take!(r::SimpleConnection, io::IOBuffer)
-    head::UInt32 = 0
-    canread(s::Integer) = bytesavailable(io) >= s
-    canread(::Type{T}) where T = canread(sizeof(T))
-    canread(x) = canread(sizeof(typeof(x)))
-
-    while canread(UInt32) && (head = peekn(io, UInt32)) != MAGIC_NUMBER
-        io.ptr += 1                             
-    end
-
-    mark(io)                                                      #Mark after discardable data
-    
-    if canread(sizeof(MAGIC_NUMBER) + 1) && (readn(io, UInt32) == MAGIC_NUMBER)
-        size = read(io, UInt8)
-        if canread(size + 1)
-            base_pos = io.ptr
-            io.ptr += size
-            if read(io, UInt8) == TAIL_MAGIC_NUMBER               #Peek ahead to make sure tail is okay
-                return IOBuffer(@view(io.data[base_pos:(base_pos + size - 1)]))
-            else
-                return nothing
-            end
-        end
-    end
-
-    io.ptr = io.mark
-    return nothing
-end
 
 const PortsObservable = Observable(Set{String}())
 
