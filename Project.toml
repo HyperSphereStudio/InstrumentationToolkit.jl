@@ -1,7 +1,7 @@
 name = "InstrumentationToolkit"
 uuid = "96abe400-b566-4cb3-9a4a-1e51861d5e98"
 authors = ["Johnathan Bizzano <bizzanoj@my.erau.edu>"]
-version = "0.0.2"
+version = "0.0.3"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -25,6 +25,7 @@ ShaderAbstractions = "65257c39-d410-5151-9873-9b3e5be5013e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 libmousetrap_jll = "287f9a42-973b-50d0-ae32-9952e735a47d"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+libsimplecommunicationencoder_jll = "2c4dffda-3ea2-5767-9525-876bd0b9da86"
 
 [compat]
 GLMakie = "0.10"
