@@ -127,11 +127,10 @@ mutable struct SimpleConnection <: IOReader
     Base.setindex!(p::SimpleConnection, port) = setport(p, port)
 end
 setport(s::SimpleConnection, name) = setport(s.port, name)
-readport(f::Function, s::SimpleConnection) = readport(f, s.port)
 send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.port, take!(s.scp)))
 Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
 Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
-function Base.take!(r::SimpleConnection, io::IOBuffer)
+function Base.read(r::SimpleConnection, io::IO)
     while bytesavailable(io) > 0
         n = readbytes!(io, r.buffer)
         readbytes!(r.scp, buffer, n)
