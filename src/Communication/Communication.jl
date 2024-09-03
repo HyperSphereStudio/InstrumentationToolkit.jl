@@ -1,18 +1,14 @@
 module Communication
 
-using LibSerialPort, Observables
+using LibSerialPort, Observables, DataStructures
 
 export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
-export readn, peekn, readl, peekl
+export readn, peekn, readl, peekl, update
 export PortsDropDown
 
 include("SimpleConnection.jl")
 
-abstract type IOReader end
-
-Base.take!(::IOReader, data::IOBuffer) = ()
-
-mutable struct MicroControllerPort{R}
+mutable struct MicroControllerPortIO <: IO
     name
     sp
     baud::Integer
@@ -20,40 +16,31 @@ mutable struct MicroControllerPort{R}
     ndatabits::Integer
     parity::SPParity
     nstopbits::Integer
-    buffer::IOBuffer
-    reader::R
     connection::Observable{Bool}
 
-    function MicroControllerPort(name, baud, reader; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
-        return new{typeof(reader)}(name, nothing, baud, mode, ndatabits, parity, nstopbits, IOBuffer(), reader, Observable(false; ignore_equal_values=true))
+    function MicroControllerPortIO(name, baud; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
+        return new(name, nothing, baud, mode, ndatabits, parity, nstopbits, Observable(false; ignore_equal_values=true))
     end
         
     Observables.on(cb::Function, p::MicroControllerPort; update=false) = on(cb, p.connection; update=update)
     Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
+	
+	Base.bytesavailable(p::MicroControllerPortIO) = LibSerialPort.bytesavailable(p.sp)
+	Base.read(p::MicroControllerPortIO, ::Type{UInt8}) = read(p.scp, UInt8)
+	Base.write(p::MicroControllerPortIO, b::UInt8) = write(p.scp, b)
+	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
+	Base.close(p::MicroControllerPortIO) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
+	Base.isopen(p::MicroControllerPortIO) = p.sp !== nothing && isopen(p.sp)
+	Base.write(p::MicroControllerPortIO, v::UInt8) = write(p.sp, v)
+	Base.print(io::IO, p::MicroControllerPortIO) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
+	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
+	function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
+		isopen(p) || error("Port not Opened!")
+		LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
+	end
 end
 
-struct RegexReader <: IOReader
-    rgx::Regex 
-    length_range::AbstractRange
-end
-DelimitedReader(delimeter = "[\n\r]", length_range = 1:1000) = RegexReader(Regex("(.*)(?:$delimeter)"), length_range)
-function Base.take!(regex::RegexReader, io::IOBuffer)
-    s = read(io, String)
-    m = match(regex.rgx, s)
-    if m !== nothing
-        str = m[1]                                                   #Match with the payload
-        io.ptr = length(m.match) + 1
-        return length(str) in regex.length_range ? str : nothing     #Set Range Limit
-    end
-    io.ptr = 1
-    return nothing
-end
-
-Base.close(p::MicroControllerPort) = isopen(p) && (LibSerialPort.close(p.sp); p.sp=nothing; p.connection[] = false)
-Base.isopen(p::MicroControllerPort) = p.sp !== nothing && LibSerialPort.isopen(p.sp)
-Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
-Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
-function setport(p::MicroControllerPort, name)
+function setport(p::MicroControllerPortIO, name)
     close(p)
     (name == "" || name === nothing) && return false
     p.sp = LibSerialPort.open(name, p.baud; mode=p.mode, ndatabits=p.ndatabits, parity=p.parity, nstopbits=p.nstopbits)
@@ -61,63 +48,47 @@ function setport(p::MicroControllerPort, name)
     return true
 end
 
-function readport(f::Function, p::MicroControllerPort)
-    if !isopen(p)
-        close(p)
-        return false
-    end
-    LibSerialPort.bytesavailable(p.sp) > 0 || return true
-   
-    try
-        p.buffer.ptr = p.buffer.size + 1
-        write(p.buffer, nonblocking_read(p.sp))
-    catch e
-        showerror(e)
-        close(p)
-    end
-    
-    while p.buffer.size > 0
-        p.buffer.ptr = 1
-        mark(p.buffer)
-        read_data = take!(p.reader, p.buffer)
-        read_data === nothing || f(read_data)
-        bytes_read = p.buffer.ptr - 1
-        bytes_read > 0 && deleteat!(p.buffer.data, 1:bytes_read)
-        p.buffer.size -= bytes_read
-        read_data === nothing && break
-    end
-
-    return true
+struct RegexStreamReader
+	src::IO
+	onPacket::Function
+    rgx::Regex 
+	buf::CircularBuffer{UInt8}
+	
+	RegexStreamReader(src, onPacket, rgx, buffer_size) = new(src, onPacket, rgx, CircularBuffer{UInt8}(buffer_size))
 end
 
-function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
-	isopen(p) || error("Port not Opened!")
-    LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
+function update(rsr::RegexStreamReader)
+	append!(rsr.buf, read(rsr.src))
+	str = String(@view rsr.buf[1:end])
+	m = match(rsr.rgx, s)
+	if m !== nothing
+		n = length(m.match)
+		rsr.onPacket(Base.unsafe_wrap(Array, pointer(m.match), n))
+		
+		for i in 1:(m.offset + n - 1)		#Trim past match		
+			pop!(rsr.buf)		
+		end
+	end
+end 
+
+DelimitedReader(src::IO, onPacket::Function, delimeter = "[\n\r]", buffer_size=256) = RegexStreamReader(src, onPacket, Regex("(.*)(?:$delimeter)"), buffer_size)
+
+struct FixedLengthReader <: IOReader 
+	src::IO
+	onPacket::Function
+	length::Integer 
+end
+function update(r::FixedLengthReader)
+	bytesavailable(r.src) >= r.length && r.onPacket(read(r.src, r.length))
 end
 
-Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
-Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
-Base.write(p::MicroControllerPort, io::IOBuffer) = write(p, pointer(io.data), io.ptr - 1)
-
-struct FixedLengthReader <: IOReader length::Integer end
-function Base.take!(r::FixedLengthReader, io::IOBuffer)
-    if bytesavailable(io) >= r.length
-        data = Array{UInt8}(undef, r.length)
-        readbytes!(io, data, r.length)
-        return data
-    end
-    return nothing
-end
-
-mutable struct SimpleConnection <: IOReader
-    port::MicroControllerPort
+mutable struct SimpleConnection <: IO
+	src::IO
     scp::SimpleConnectionProtocol
     buffer::Vector{UInt8}
 
-    function SimpleConnection(port::MicroControllerPort, on_packet_rx::Function, max_payload_size::Integer=256)
-        c = new(port, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 64))
-        port.reader = c
-        c
+    function SimpleConnection(src::IO, on_packet_rx::Function, max_payload_size::Integer=256)
+        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 64))
     end
 
     Base.close(c::SimpleConnection) = close(c.port)
@@ -125,17 +96,18 @@ mutable struct SimpleConnection <: IOReader
     Base.print(io::IO, c::SimpleConnection) = print(io, "Connection[Name=$(c.port.name), Open=$(isopen(c))]")
     Observables.on(cb::Function, p::SimpleConnection; update=false) = on(cb, p.port; update=update)
     Base.setindex!(p::SimpleConnection, port) = setport(p, port)
+	
+	Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
+	Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
+end
+function update(r::SimpleConnection)
+	while bytesavailable(r.src) > 0
+		n = readbytes!(r.src, r.buffer)
+		readbytes!(r.scp, buffer, n)
+	end
 end
 setport(s::SimpleConnection, name) = setport(s.port, name)
 send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.port, take!(s.scp)))
-Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
-Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
-function Base.read(r::SimpleConnection, io::IO)
-    while bytesavailable(io) > 0
-        n = readbytes!(io, r.buffer)
-        readbytes!(r.scp, buffer, n)
-    end
-end
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
 peekn(io::IO, ::Type{T}) where T <: Number = ntoh(peek(io, T))
