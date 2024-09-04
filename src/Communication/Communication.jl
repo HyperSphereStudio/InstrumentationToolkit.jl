@@ -27,14 +27,14 @@ mutable struct MicroControllerPort <: IO
 	
 	Base.bytesavailable(p::MicroControllerPort) = LibSerialPort.bytesavailable(p.sp)
 	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.scp, UInt8)
-	Base.write(p::MicroControllerPort, b::UInt8) = write(p.scp, b)
+	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
+	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
 	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
 	Base.close(p::MicroControllerPort) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
 	Base.isopen(p::MicroControllerPort) = p.sp !== nothing && isopen(p.sp)
 	Base.eof(p::MicroControllerPort) = !isopen(p)
-	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
 	Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
-	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
+
 	function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
 		isopen(p) || error("Port not Opened!")
 		LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
