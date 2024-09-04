@@ -8,7 +8,7 @@ mutable struct SimpleConnectionProtocol <: IO
     handle::Ptr{Cvoid}
     on_packet_rx::Base.CFunction
 
-    function SimpleConnectionProtocol(max_payload_size::Integer, on_packet_rx_f::Function)
+    function SimpleConnectionProtocol(on_packet_rx_f::Function, max_payload_size::Integer)
         handle = @ccall libprotocolpath.SimpleConnectionProtocol_new(max_payload_size::UInt16)::Ptr{Cvoid}
         
         on_packet_rx = @cfunction $(

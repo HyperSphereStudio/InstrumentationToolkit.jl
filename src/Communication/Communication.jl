@@ -1,6 +1,6 @@
 module Communication
 
-using LibSerialPort, Observables, DataStructures, libsimplecommunicationencoder_jll
+using LibSerialPort, Observables, DataStructures
 
 export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
 export readn, peekn, readl, peekl, update
