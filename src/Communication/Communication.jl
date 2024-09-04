@@ -8,7 +8,7 @@ export PortsDropDown
 
 include("SimpleConnection.jl")
 
-mutable struct MicroControllerPortIO <: IO
+mutable struct MicroControllerPort <: IO
     name
     sp
     baud::Integer
@@ -18,21 +18,22 @@ mutable struct MicroControllerPortIO <: IO
     nstopbits::Integer
     connection::Observable{Bool}
 
-    function MicroControllerPortIO(name, baud; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
+    function MicroControllerPort(name, baud; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
         return new(name, nothing, baud, mode, ndatabits, parity, nstopbits, Observable(false; ignore_equal_values=true))
     end
         
     Observables.on(cb::Function, p::MicroControllerPort; update=false) = on(cb, p.connection; update=update)
     Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
 	
-	Base.bytesavailable(p::MicroControllerPortIO) = LibSerialPort.bytesavailable(p.sp)
-	Base.read(p::MicroControllerPortIO, ::Type{UInt8}) = read(p.scp, UInt8)
-	Base.write(p::MicroControllerPortIO, b::UInt8) = write(p.scp, b)
+	Base.bytesavailable(p::MicroControllerPort) = LibSerialPort.bytesavailable(p.sp)
+	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.scp, UInt8)
+	Base.write(p::MicroControllerPort, b::UInt8) = write(p.scp, b)
 	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
-	Base.close(p::MicroControllerPortIO) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
-	Base.isopen(p::MicroControllerPortIO) = p.sp !== nothing && isopen(p.sp)
-	Base.write(p::MicroControllerPortIO, v::UInt8) = write(p.sp, v)
-	Base.print(io::IO, p::MicroControllerPortIO) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
+	Base.close(p::MicroControllerPort) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
+	Base.isopen(p::MicroControllerPort) = p.sp !== nothing && isopen(p.sp)
+	Base.eof(p::MicroControllerPort) = !isopen(p)
+	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
+	Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
 	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
 	function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
 		isopen(p) || error("Port not Opened!")
@@ -40,7 +41,7 @@ mutable struct MicroControllerPortIO <: IO
 	end
 end
 
-function setport(p::MicroControllerPortIO, name)
+function setport(p::MicroControllerPort, name)
     close(p)
     (name == "" || name === nothing) && return false
     p.sp = LibSerialPort.open(name, p.baud; mode=p.mode, ndatabits=p.ndatabits, parity=p.parity, nstopbits=p.nstopbits)
@@ -55,6 +56,7 @@ struct RegexStreamReader
 	buf::CircularBuffer{UInt8}
 	
 	RegexStreamReader(src, onPacket, rgx, buffer_size) = new(src, onPacket, rgx, CircularBuffer{UInt8}(buffer_size))
+	Base.eof(rsr::RegexStreamReader) = eof(rsr.src)
 end
 
 function update(rsr::RegexStreamReader)
@@ -73,13 +75,23 @@ end
 
 DelimitedReader(src::IO, onPacket::Function, delimeter = "[\n\r]", buffer_size=256) = RegexStreamReader(src, onPacket, Regex("(.*)(?:$delimeter)"), buffer_size)
 
-struct FixedLengthReader <: IOReader 
+struct FixedLengthReader
 	src::IO
 	onPacket::Function
 	length::Integer 
+	
+	Base.eof(flr::FixedLengthReader) = eof(flr.src)
 end
 function update(r::FixedLengthReader)
 	bytesavailable(r.src) >= r.length && r.onPacket(read(r.src, r.length))
+end
+
+function async_read_update(reader)
+	@async begin
+		while !eof(reader)
+			update(reader)
+		end
+	end
 end
 
 mutable struct SimpleConnection <: IO
@@ -88,7 +100,7 @@ mutable struct SimpleConnection <: IO
     buffer::Vector{UInt8}
 
     function SimpleConnection(src::IO, on_packet_rx::Function, max_payload_size::Integer=256)
-        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 64))
+        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 32))
     end
 
     Base.close(c::SimpleConnection) = close(c.port)

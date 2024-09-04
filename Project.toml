@@ -1,7 +1,7 @@
 name = "InstrumentationToolkit"
 uuid = "96abe400-b566-4cb3-9a4a-1e51861d5e98"
 authors = ["Johnathan Bizzano <bizzanoj@my.erau.edu>"]
-version = "0.0.3"
+version = "0.0.4"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
