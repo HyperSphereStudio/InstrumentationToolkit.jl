@@ -43,7 +43,7 @@ mutable struct MicroControllerPort <: IO
 end
 
 struct ReadBuffer
-	io::IOBuffer()
+	io::IOBuffer
 	buf::Vector{UInt8}
 	ReadBuffer() = new(IOBuffer(; read=true, write=false, append=false), zeros(UInt8, 64))
 	function Base.setindex(rb::ReadBuffer, v::Vector{UInt8})
