@@ -42,6 +42,26 @@ mutable struct MicroControllerPort <: IO
 	end
 end
 
+struct ReadBuffer
+	io::IOBuffer()
+	buf::Vector{UInt8}
+	ReadBuffer() = new(IOBuffer(; read=true, write=false, append=false), zeros(UInt8, 64))
+	function Base.setindex(rb::ReadBuffer, v::Vector{UInt8})
+		rb.io.data = v
+		rb.io.ptr = 1
+		rb.io.size = length(v)
+	end
+end
+Base.reset(rb::ReadBuffer) = (rb.io.size=0; rb.io.ptr=1)
+function Base.write(rb::ReadBuffer, k::IO, max_bytes=10000)
+	bytes_rem = max_bytes
+	while bytesavailable(k) > 0 && bytes_rem > 0
+		n = readbytes!(k, rb.buf, min(bytesavailable(k), length(rb.buf)))
+		write(rb.io, @view rb.buf[1:n])
+		bytes_rem -= n
+	end
+end
+
 function setport(p::MicroControllerPort, name)
     close(p)
     (name == "" || name === nothing) && return false
@@ -55,8 +75,9 @@ struct RegexStreamReader
 	onPacket::Function
     rgx::Regex 
 	buf::CircularBuffer{UInt8}
+	io::ReadBuffer
 	
-	RegexStreamReader(src, onPacket, rgx, buffer_size) = new(src, onPacket, rgx, CircularBuffer{UInt8}(buffer_size))
+	RegexStreamReader(src, onPacket, rgx, buffer_size) = new(src, onPacket, rgx, CircularBuffer{UInt8}(buffer_size), ReadBuffer())
 	Base.eof(rsr::RegexStreamReader) = eof(rsr.src)
 end
 
@@ -66,7 +87,10 @@ function update(rsr::RegexStreamReader)
 	m = match(rsr.rgx, s)
 	if m !== nothing
 		n = length(m.match)
-		rsr.onPacket(Base.unsafe_wrap(Array, pointer(m.match), n))
+		
+		reset(rsr.io)
+		write(rsr.io.io, m.match, n)		#Write from match to iobuf
+		rsr.onPacket(rsr.io.io)
 		
 		for i in 1:(m.offset + n - 1)		#Trim past match		
 			pop!(rsr.buf)		
@@ -79,12 +103,19 @@ DelimitedReader(src::IO, onPacket::Function, delimeter = "[\n\r]", buffer_size=2
 struct FixedLengthReader
 	src::IO
 	onPacket::Function
-	length::Integer 
+	length::Int
+	bp::ReadBuffer	
+	
+	FixedLengthReader(src::IO, onPacket::Function, length::Integer) = new(src, onPacket, length, BufferedPacket())
 	
 	Base.eof(flr::FixedLengthReader) = eof(flr.src)
 end
 function update(r::FixedLengthReader)
-	bytesavailable(r.src) >= r.length && r.onPacket(read(r.src, r.length))
+	if bytesavailable(r.src) >= r.length
+		reset(r.bp)
+		write(r.bp, r.src, r.length)
+		r.onPacket(r.bp.io)
+	end
 end
 
 function async_read_update(reader; sleep_delta=1E-2)
@@ -103,7 +134,12 @@ mutable struct SimpleConnection <: IO
     scp::SimpleConnectionProtocol
 
     function SimpleConnection(src::IO, on_packet_rx::Function, max_payload_size::Integer=256)
-        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size))
+		rb = ReadBuffer()
+        new(src, SimpleConnectionProtocol(
+			function packet_rx_to_io(packet::AbstractArray{UInt8})
+				rb[] = packet
+				on_packet_rx(rb.io)
+			end, max_payload_size))
     end
 
 	Base.eof(c::SimpleConnection) = eof(c.src)
