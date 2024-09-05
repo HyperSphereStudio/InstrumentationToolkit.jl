@@ -25,9 +25,9 @@ mutable struct MicroControllerPort <: IO
     Observables.on(cb::Function, p::MicroControllerPort; update=false) = on(cb, p.connection; update=update)
     Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
 	
-	Base.bytesavailable(p::MicroControllerPort) = LibSerialPort.bytesavailable(p.sp)
+	Base.bytesavailable(p::MicroControllerPort) = bytesavailable(p.sp)
 	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.sp, UInt8)
-	Base.readbytes!(p::MicroControllerPort, ) = 
+	Base.read(p::MicroControllerPort) = read(p.sp)
 	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
 	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
 	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
