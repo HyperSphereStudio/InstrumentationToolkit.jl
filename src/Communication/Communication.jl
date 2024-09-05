@@ -46,7 +46,7 @@ struct ReadBuffer
 	io::IOBuffer
 	buf::Vector{UInt8}
 	ReadBuffer() = new(IOBuffer(; read=true, write=false, append=false), zeros(UInt8, 64))
-	function Base.setindex(rb::ReadBuffer, v::Vector{UInt8})
+	function Base.setindex!(rb::ReadBuffer, v::Vector{UInt8})
 		rb.io.data = v
 		rb.io.ptr = 1
 		rb.io.size = length(v)
