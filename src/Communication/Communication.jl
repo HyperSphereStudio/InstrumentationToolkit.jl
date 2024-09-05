@@ -26,7 +26,8 @@ mutable struct MicroControllerPort <: IO
     Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
 	
 	Base.bytesavailable(p::MicroControllerPort) = LibSerialPort.bytesavailable(p.sp)
-	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.scp, UInt8)
+	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.sp, UInt8)
+	Base.readbytes!(p::MicroControllerPort, ) = 
 	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
 	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
 	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
@@ -86,38 +87,35 @@ function update(r::FixedLengthReader)
 	bytesavailable(r.src) >= r.length && r.onPacket(read(r.src, r.length))
 end
 
-function async_read_update(reader)
+function async_read_update(reader; sleep_delta=1E-2)
+	alive = Ref(true)
 	@async begin
-		while !eof(reader)
+		while alive[] && !eof(reader)
 			update(reader)
+			sleep(sleep_delta)
 		end
 	end
+	alive
 end
 
 mutable struct SimpleConnection <: IO
 	src::IO
     scp::SimpleConnectionProtocol
-    buffer::Vector{UInt8}
 
     function SimpleConnection(src::IO, on_packet_rx::Function, max_payload_size::Integer=256)
-        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size), zeros(UInt8, 32))
+        new(src, SimpleConnectionProtocol(on_packet_rx, max_payload_size))
     end
 
+	Base.eof(c::SimpleConnection) = eof(c.src)
     Base.close(c::SimpleConnection) = close(c.port)
     Base.isopen(c::SimpleConnection) = isopen(c.port)
     Base.print(io::IO, c::SimpleConnection) = print(io, "Connection[Name=$(c.port.name), Open=$(isopen(c))]")
     Observables.on(cb::Function, p::SimpleConnection; update=false) = on(cb, p.port; update=update)
     Base.setindex!(p::SimpleConnection, port) = setport(p, port)
-	
 	Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
 	Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
 end
-function update(r::SimpleConnection)
-	while bytesavailable(r.src) > 0
-		n = readbytes!(r.src, r.buffer)
-		readbytes!(r.scp, buffer, n)
-	end
-end
+update(r::SimpleConnection) = read(r.scp, read(r.src))
 setport(s::SimpleConnection, name) = setport(s.port, name)
 send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.port, take!(s.scp)))
 

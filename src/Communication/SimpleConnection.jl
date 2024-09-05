@@ -40,6 +40,8 @@ function Base.read(scp::SimpleConnectionProtocol, v::UInt8)
     @ccall libprotocolpath.SimpleConnectionProtocol_recieveChar(scp.handle::Ptr{Cvoid}, v::UInt8, scp.on_packet_rx::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::UInt16
 end
 
+Base.read(scp::SimpleConnectionProtocol, k::AbstractVector{UInt8}) = readbytes!(scp, k)
+
 function Base.readbytes!(scp::SimpleConnectionProtocol, v::AbstractVector{UInt8}, nb=length(v))
     @ccall libprotocolpath.SimpleConnectionProtocol_recieve(scp.handle::Ptr{Cvoid}, v::Ptr{UInt8}, nb::UInt16, scp.on_packet_rx::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::UInt16
 end
