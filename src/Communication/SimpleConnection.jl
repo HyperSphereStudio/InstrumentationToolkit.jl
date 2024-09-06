@@ -24,7 +24,7 @@ mutable struct SimpleConnectionProtocol <: IO
     end
 end
 function Base.unsafe_write(scp::SimpleConnectionProtocol, p::Ptr{UInt8}, n::UInt)
-    @ccall libprotocolpath.SimpleConnectionProtocol_write(scp.handle::Ptr{Cvoid}, p, UInt16(n))::UInt16
+    @ccall libprotocolpath.SimpleConnectionProtocol_write(scp.handle::Ptr{Cvoid}, p::Ptr{UInt8}, n::UInt16)::UInt16
 end
 function Base.write(scp::SimpleConnectionProtocol, v::UInt8)
     @ccall libprotocolpath.SimpleConnectionProtocol_writeChar(scp.handle::Ptr{Cvoid}, v::UInt8)::UInt16
