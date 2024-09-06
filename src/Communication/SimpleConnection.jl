@@ -23,8 +23,8 @@ mutable struct SimpleConnectionProtocol <: IO
         x
     end
 end
-function Base.write(scp::SimpleConnectionProtocol, v::AbstractArray{UInt8}, n=length(v))
-    @ccall libprotocolpath.SimpleConnectionProtocol_write(scp.handle::Ptr{Cvoid}, pointer(v)::Ptr{UInt8}, length(v)::UInt16)::UInt16
+function Base.unsafe_write(scp::SimpleConnectionProtocol, p::Ptr{UInt8}, n::UInt)
+    @ccall libprotocolpath.SimpleConnectionProtocol_write(scp.handle::Ptr{Cvoid}, p, UInt16(n))::UInt16
 end
 function Base.write(scp::SimpleConnectionProtocol, v::UInt8)
     @ccall libprotocolpath.SimpleConnectionProtocol_writeChar(scp.handle::Ptr{Cvoid}, v::UInt8)::UInt16

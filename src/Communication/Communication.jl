@@ -26,17 +26,17 @@ mutable struct MicroControllerPort <: IO
     Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
 	
 	Base.bytesavailable(p::MicroControllerPort) = bytesavailable(p.sp)
+	
 	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.sp, UInt8)
 	Base.read(p::MicroControllerPort) = read(p.sp)
-	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
-	Base.write(p::MicroControllerPort, a::AbstractArray{UInt8}) = write(p, pointer(a), length(a))
-	Base.write(p::MicroControllerPort, ptr::Ptr{T}, n::Integer) where T = write(p, convert(Ptr{UInt8}, ptr), n * sizeof(T))
+	
 	Base.close(p::MicroControllerPort) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
 	Base.isopen(p::MicroControllerPort) = p.sp !== nothing && isopen(p.sp)
 	Base.eof(p::MicroControllerPort) = !isopen(p)
 	Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
 
-	function Base.write(p::MicroControllerPort, ptr::Ptr{UInt8}, n::Integer)
+	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
+	function Base.unsafe_write(p::MicroControllerPort, p::Ptr{UInt8}, n::UInt)
 		isopen(p) || error("Port not Opened!")
 		LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
 	end
@@ -106,7 +106,7 @@ struct FixedLengthReader
 	length::Int
 	bp::ReadBuffer	
 	
-	FixedLengthReader(src::IO, onPacket::Function, length::Integer) = new(src, onPacket, length, BufferedPacket())
+	FixedLengthReader(src::IO, onPacket::Function, length::Integer) = new(src, onPacket, length, ReadBuffer())
 	
 	Base.eof(flr::FixedLengthReader) = eof(flr.src)
 end
@@ -148,12 +148,13 @@ mutable struct SimpleConnection <: IO
     Base.print(io::IO, c::SimpleConnection) = print(io, "Connection[Name=$(c.port.name), Open=$(isopen(c))]")
     Observables.on(cb::Function, p::SimpleConnection; update=false) = on(cb, p.port; update=update)
     Base.setindex!(p::SimpleConnection, port) = setport(p, port)
+	
 	Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
-	Base.write(s::SimpleConnection, v::AbstractArray{UInt8}, n=length(v)) = write(s.scp, v, n)
+	Base.unsafe_write(s::SimpleConnection, p::Ptr{UInt8}, n::UInt) = unsafe_write(s.scp, p, n)
 end
 update(r::SimpleConnection) = read(r.scp, read(r.src))
 setport(s::SimpleConnection, name) = setport(s.port, name)
-send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.port, take!(s.scp)))
+send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.src, take!(s.scp)))
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
 peekn(io::IO, ::Type{T}) where T <: Number = ntoh(peek(io, T))
