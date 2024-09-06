@@ -34,11 +34,10 @@ mutable struct MicroControllerPort <: IO
 	Base.isopen(p::MicroControllerPort) = p.sp !== nothing && isopen(p.sp)
 	Base.eof(p::MicroControllerPort) = !isopen(p)
 	Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
-
 	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
-	function Base.unsafe_write(p::MicroControllerPort, p::Ptr{UInt8}, n::UInt)
+	function Base.unsafe_write(s::MicroControllerPort, p::Ptr{UInt8}, n::UInt)
 		isopen(p) || error("Port not Opened!")
-		LibSerialPort.sp_nonblocking_write(s.port.sp.ref, ptr, n)
+		unsafe_write(s.sp, p, n)
 	end
 end
 
