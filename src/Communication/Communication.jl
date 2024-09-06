@@ -2,44 +2,11 @@ module Communication
 
 using LibSerialPort, Observables, DataStructures
 
-export MicroControllerPort, setport, readport, RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
+export RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
 export readn, peekn, readl, peekl, update
 export PortsDropDown
 
 include("SimpleConnection.jl")
-
-mutable struct MicroControllerPort <: IO
-    name
-    sp
-    baud::Integer
-    mode::SPMode
-    ndatabits::Integer
-    parity::SPParity
-    nstopbits::Integer
-    connection::Observable{Bool}
-
-    function MicroControllerPort(name, baud; mode=SP_MODE_READ_WRITE, ndatabits=8, parity=SP_PARITY_NONE, nstopbits=1)
-        return new(name, nothing, baud, mode, ndatabits, parity, nstopbits, Observable(false; ignore_equal_values=true))
-    end
-        
-    Observables.on(cb::Function, p::MicroControllerPort; update=false) = on(cb, p.connection; update=update)
-    Base.setindex!(p::MicroControllerPort, port) = setport(p, port)
-	
-	Base.bytesavailable(p::MicroControllerPort) = bytesavailable(p.sp)
-	
-	Base.read(p::MicroControllerPort, ::Type{UInt8}) = read(p.sp, UInt8)
-	Base.read(p::MicroControllerPort) = read(p.sp)
-	
-	Base.close(p::MicroControllerPort) = isopen(p) && (close(p.sp); p.sp=nothing; p.connection[] = false)
-	Base.isopen(p::MicroControllerPort) = p.sp !== nothing && isopen(p.sp)
-	Base.eof(p::MicroControllerPort) = !isopen(p)
-	Base.print(io::IO, p::MicroControllerPort) = print(io, "Port[$(p.name), baud=$(p.baud), open=$(isopen(p))]")
-	Base.write(p::MicroControllerPort, v::UInt8) = write(p.sp, v)
-	function Base.unsafe_write(s::MicroControllerPort, p::Ptr{UInt8}, n::UInt)
-		isopen(p) || error("Port not Opened!")
-		unsafe_write(s.sp, p, n)
-	end
-end
 
 struct ReadBuffer
 	io::IOBuffer
@@ -59,14 +26,6 @@ function Base.write(rb::ReadBuffer, k::IO, max_bytes=10000)
 		write(rb.io, @view rb.buf[1:n])
 		bytes_rem -= n
 	end
-end
-
-function setport(p::MicroControllerPort, name)
-    close(p)
-    (name == "" || name === nothing) && return false
-    p.sp = LibSerialPort.open(name, p.baud; mode=p.mode, ndatabits=p.ndatabits, parity=p.parity, nstopbits=p.nstopbits)
-    p.connection[] = true
-    return true
 end
 
 struct RegexStreamReader
