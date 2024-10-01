@@ -1,6 +1,6 @@
 module Communication
 
-using LibSerialPort, Observables, DataStructures
+using LibSerialPort, Observables, DataStructures, Mousetrap
 
 export RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
 export readn, peekn, readl, peekl, update
