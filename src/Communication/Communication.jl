@@ -113,6 +113,9 @@ end
 update(r::SimpleConnection) = read(r.scp, read(r.src))
 setport(s::SimpleConnection, name) = setport(s.port, name)
 send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.src, take!(s.scp)))
+error_count(c::SimpleConnection) = Int(error_count(c.scp))
+Base.isopen(c::SimpleConnection) = isopen(c.src)
+Base.bytesavailable(c::SimpleConnection) = bytesavailable(c.src)
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
 peekn(io::IO, ::Type{T}) where T <: Number = ntoh(peek(io, T))
