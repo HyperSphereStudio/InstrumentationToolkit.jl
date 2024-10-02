@@ -101,11 +101,8 @@ mutable struct SimpleConnection <: IO
     end
 
 	Base.eof(c::SimpleConnection) = eof(c.src)
-    Base.close(c::SimpleConnection) = close(c.port)
-    Base.isopen(c::SimpleConnection) = isopen(c.port)
     Base.print(io::IO, c::SimpleConnection) = print(io, "Connection[Name=$(c.port.name), Open=$(isopen(c))]")
     Observables.on(cb::Function, p::SimpleConnection; update=false) = on(cb, p.port; update=update)
-    Base.setindex!(p::SimpleConnection, port) = setport(p, port)
 	
 	Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
 	Base.unsafe_write(s::SimpleConnection, p::Ptr{UInt8}, n::UInt) = unsafe_write(s.scp, p, n)
