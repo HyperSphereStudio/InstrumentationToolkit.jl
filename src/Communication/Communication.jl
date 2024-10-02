@@ -3,7 +3,7 @@ module Communication
 using LibSerialPort, Observables, DataStructures, Mousetrap
 
 export RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
-export readn, peekn, readl, peekl, update
+export readn, peekn, readl, peekl, update, async_update_loop
 export PortsDropDown
 
 include("SimpleConnection.jl")
@@ -76,7 +76,7 @@ function update(r::FixedLengthReader)
 	end
 end
 
-function async_read_update(reader; sleep_delta=1E-2)
+function async_update_loop(reader; sleep_delta=1E-2)
 	alive = Ref(true)
 	@async begin
 		while alive[] && !eof(reader)
@@ -110,12 +110,13 @@ mutable struct SimpleConnection <: IO
 	Base.write(s::SimpleConnection, v::UInt8) = write(s.scp, v)
 	Base.unsafe_write(s::SimpleConnection, p::Ptr{UInt8}, n::UInt) = unsafe_write(s.scp, p, n)
 end
-update(r::SimpleConnection) = read(r.scp, read(r.src))
-setport(s::SimpleConnection, name) = setport(s.port, name)
-send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); write(s.src, take!(s.scp)))
+Base.open(r::SimpleConnection, src::IO) = r.src = src
+update(r::SimpleConnection) = isopen(r) && read(r.scp, read(r.src))
+send(s::SimpleConnection, args...) = (foreach(a->write(s, a), args); flush(s))
 error_count(c::SimpleConnection) = Int(error_count(c.scp))
-Base.isopen(c::SimpleConnection) = isopen(c.src)
+Base.isopen(c::SimpleConnection) = isopen(c.src) && !eof(c.src)
 Base.bytesavailable(c::SimpleConnection) = bytesavailable(c.src)
+Base.flush(s::SimpleConnection) = write(s.src, take!(s.scp))
 
 readn(io::IO, ::Type{T}) where T <: Number = ntoh(read(io, T))
 peekn(io::IO, ::Type{T}) where T <: Number = ntoh(peek(io, T))
