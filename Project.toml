@@ -28,6 +28,7 @@ Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 libsimplecommunicationencoder_jll = "2c4dffda-3ea2-5767-9525-876bd0b9da86"
 StringViews = "354b36f9-a18e-4713-926e-db85100087ba"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 
 [compat]
 GLMakie = "0.10"
