@@ -151,19 +151,16 @@ function safe_wrap(f; on_error=(e->showerror(stdout, e, catch_backtrace())))
 end
 
 function PortsDropDown(on_port_select)
-    ids = DropDownItemID[]
     dd = DropDown()
     observable_func = Ref{Any}(nothing)
-    
+    push_back!(_->(on_port_select(""); nothing), dd, "(None)")
+
     connect_signal_realize!(dd) do self
-        initial = true
-        observable_func[] = on(PortsObservable; update=true) do pl                                
-                                foreach(id -> remove!(dd, id), ids)
-                                empty!(ids)
+        observable_func[] = on(PortsObservable; update=true) do pl       
+                                empty!(dd)      #Wont Remove First Item
                                 for id in pl
-                                   push!(ids, push_back!(_->(initial || on_port_select(id); nothing), dd, id))                                     
-                                end
-                                initial = false
+                                    push_back!(_->(on_port_select(id); nothing), dd, id)                                   
+                                end                     
                             end
         nothing
     end
