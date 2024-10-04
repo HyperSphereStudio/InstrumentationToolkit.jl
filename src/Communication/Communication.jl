@@ -3,7 +3,7 @@ module Communication
 using LibSerialPort, Observables, DataStructures, Mousetrap
 
 export RegexReader, DelimitedReader, PortsObservable, FixedLengthReader, SimpleConnection, send
-export readn, peekn, readl, peekl, update, async_update_loop
+export readn, peekn, readl, peekl, update, async_update_loop, safe_wrap
 export PortsDropDown
 
 include("SimpleConnection.jl")
