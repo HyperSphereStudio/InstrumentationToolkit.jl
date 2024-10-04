@@ -140,6 +140,16 @@ function __init__()
     end
 end
 
+function safe_wrap(f; on_error=(e->showerror(stdout, e, catch_backtrace())))
+    function safe_wrapping(args...)
+        try 
+            f(args...)
+        catch e
+            on_error(e)
+        end
+    end
+end
+
 function PortsDropDown(on_port_select)
     ids = DropDownItemID[]
     dd = DropDown()
