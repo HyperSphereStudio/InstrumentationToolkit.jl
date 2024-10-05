@@ -159,7 +159,7 @@ function PortsDropDown(on_port_select)
 
     connect_signal_realize!(dd) do self
         observable_func[] = on(PortsObservable; update=true) do pl       
-								sel_item = get_selected!(dd)
+								sel_item = get_selected(dd)
 
 								filter!(function port_filter(idx)
 											if !haskey(pl, idx[2])
