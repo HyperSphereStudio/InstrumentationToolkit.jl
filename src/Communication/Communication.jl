@@ -152,15 +152,30 @@ end
 
 function PortsDropDown(on_port_select)
     dd = DropDown()
+	itemTable = Dict{DropDownItemID, String}()
     observable_func = Ref{Any}(nothing)
-    push_back!(_->(on_port_select(""); nothing), dd, "(None)")
+	
+    none_item = push_back!(_->(on_port_select(""); nothing), dd, "(None)")
 
     connect_signal_realize!(dd) do self
         observable_func[] = on(PortsObservable; update=true) do pl       
-                                empty!(dd)      #Wont Remove First Item
-                                for id in pl
-                                    push_back!(_->(on_port_select(id); nothing), dd, id)                                   
-                                end                     
+								sel_item = get_selected!(dd)
+
+								filter!(function port_filter(idx)
+											if !haskey(pl, idx[2])
+												sel_item == idx[1] && set_selected!(dd, none_item)
+												remove!(dd, idx[1])
+												return false
+											end
+											return true
+										end, itemTable)
+										
+								for port_name in pl
+									if !haskey(itemTable, port_name)
+										port_id = push_back!(_->(on_port_select(id); nothing), dd, port_name)
+										itemTable[port_id] = port_name
+									end
+								end                   
                             end
         nothing
     end
