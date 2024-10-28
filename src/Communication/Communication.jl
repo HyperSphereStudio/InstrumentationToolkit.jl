@@ -179,7 +179,7 @@ function PortsDropDown(on_port_select)
 										
 								for port_name in pl
 									if !haskey(itemTable, port_name)
-										port_id = push_back!(_->(on_port_select(id); nothing), dd, get_port_description(port_name))
+										port_id = push_back!(_->(on_port_select(port_name); nothing), dd, get_port_description(port_name))
 										itemTable[port_id] = port_name
 									end
 								end                   
