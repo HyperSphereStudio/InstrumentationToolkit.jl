@@ -150,6 +150,13 @@ function safe_wrap(f; on_error=(e->showerror(stdout, e, catch_backtrace())))
     end
 end
 
+function get_port_description(portname)
+    port = LibSerialPort.sp_get_port_by_name(portname)
+    desc = LibSerialPort.sp_get_port_description(port)
+    LibSerialPort.sp_free_port(port)
+    return desc
+end
+
 function PortsDropDown(on_port_select)
     dd = DropDown()
 	itemTable = Dict{DropDownItemID, String}()
@@ -172,7 +179,7 @@ function PortsDropDown(on_port_select)
 										
 								for port_name in pl
 									if !haskey(itemTable, port_name)
-										port_id = push_back!(_->(on_port_select(id); nothing), dd, port_name)
+										port_id = push_back!(_->(on_port_select(id); nothing), dd, get_port_description(port_name))
 										itemTable[port_id] = port_name
 									end
 								end                   
