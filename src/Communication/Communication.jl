@@ -169,7 +169,7 @@ function PortsDropDown(on_port_select)
 								sel_item = get_selected(dd)
 
 								filter!(function port_filter(keyval)
-											if !haskey(pl, keyval[1])
+											if !(keyval[1] in pl)
 												sel_item == keyval[2] && set_selected!(dd, none_item)
 												remove!(dd, keyval[2])
 												return false
