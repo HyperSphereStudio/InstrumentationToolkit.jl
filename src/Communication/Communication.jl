@@ -159,7 +159,7 @@ end
 
 function PortsDropDown(on_port_select)
     dd = DropDown()
-	itemTable = Dict{DropDownItemID, String}()
+	itemTable = Dict{String, DropDownItemID}()
     observable_func = Ref{Any}(nothing)
 	
     none_item = push_back!(_->(on_port_select(""); nothing), dd, "(None)")
@@ -168,10 +168,10 @@ function PortsDropDown(on_port_select)
         observable_func[] = on(PortsObservable; update=true) do pl       
 								sel_item = get_selected(dd)
 
-								filter!(function port_filter(idx)
-											if !haskey(pl, idx[2])
-												sel_item == idx[1] && set_selected!(dd, none_item)
-												remove!(dd, idx[1])
+								filter!(function port_filter(keyval)
+											if !haskey(pl, keyval[1])
+												sel_item == keyval[2] && set_selected!(dd, none_item)
+												remove!(dd, keyval[2])
 												return false
 											end
 											return true
@@ -180,7 +180,7 @@ function PortsDropDown(on_port_select)
 								for port_name in pl
 									if !haskey(itemTable, port_name)
 										port_id = push_back!(_->(on_port_select(port_name); nothing), dd, get_port_description(port_name))
-										itemTable[port_id] = port_name
+										itemTable[port_name] = port_id
 									end
 								end                   
                             end
